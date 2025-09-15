@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Laxatives & Cathartics — Drag & Drop (Many-to-One)</title>
+  <style>
+    :root { --bg:#0b1324; --card:#111a33; --ink:#e8eefc; --muted:#9fb2e0; --accent:#8ab4ff; --good:#2ecc71; --bad:#e74c3c; }
+    html, body { height: 100%; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+           background: radial-gradient(1200px 600px at 50% -20%, #12204a 0%, #0b1324 60%);
+           color:var(--ink); display:flex; flex-direction:column; }
+    header{padding:1.1rem 1rem .4rem;text-align:center;}
+    h1{margin:0 0 .25rem;font-size:clamp(1.25rem,2.5vw,2rem);letter-spacing:.2px;}
+    .subtitle{color:var(--muted);font-size:.95rem;}
+    .wrap{display:grid;gap:1rem;grid-template-columns:1fr;max-width:1100px;margin:0 auto;padding:1rem;width:100%;}
+    @media(min-width:900px){.wrap{grid-template-columns:1fr 1fr;}}
+    .panel{background:rgba(17,26,51,.72);border:1px solid rgba(138,180,255,.15);border-radius:16px;padding:.85rem;backdrop-filter:blur(6px);box-shadow:0 10px 30px rgba(0,0,0,.25);}
+    .panel h2{margin:.25rem .25rem .75rem;font-size:1rem;color:var(--muted);}
+    .list{display:grid;gap:.6rem;grid-auto-rows:minmax(50px,auto);}
+    .pill,.drop{border-radius:12px;padding:.65rem .75rem;border:1px dashed rgba(138,180,255,.35);background:rgba(255,255,255,.03);}
+    .pill{cursor:grab;font-weight:600;display:flex;align-items:center;justify-content:space-between;}
+    .pill:active{cursor:grabbing;}
+    .tag{font-size:.7rem;color:var(--muted);margin-left:.5rem;}
+    .drop{min-height:80px;display:grid;align-items:center;transition:background .15s,border-color .15s;}
+    .drop.hover{background:rgba(138,180,255,.08);border-color:var(--accent);}
+    .drop.filled{border-style:solid;}
+    .desc{font-size:.92rem;line-height:1.25rem;}
+    .chips{display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.45rem;}
+    .chip{font-size:.78rem;padding:.1rem .4rem;border-radius:9px;border:1px solid rgba(138,180,255,.35);color:var(--muted);}
+    .controls{display:flex;gap:.6rem;flex-wrap:wrap;justify-content:center;padding:.6rem 1rem 1rem;}
+    button{background:var(--card);color:var(--ink);border:1px solid rgba(138,180,255,.3);padding:.6rem .9rem;border-radius:12px;font-weight:600;cursor:pointer;}
+    .result{text-align:center;font-weight:700;padding:.5rem 0;}
+    .correct{color:var(--good);} .incorrect{color:var(--bad);}
+    footer{text-align:center;color:var(--muted);font-size:.8rem;padding-bottom:1rem;}
+  </style>
+</head>
+<body>
+<header>
+  <h1>Laxatives & Cathartics — Drag & Drop</h1>
+  <div class="subtitle">Drag each <b>drug</b> (left) onto its category’s <b>mechanism</b> (right). Each description can accept multiple correct drugs. Order shuffles every load.</div>
+</header>
+
+<div class="controls">
+  <button id="reshuffleBtn">🔀 Shuffle</button>
+  <button id="resetBtn">♻️ Reset</button>
+  <div class="result" id="score"></div>
+</div>
+
+<main class="wrap">
+  <section class="panel"><h2>Drugs</h2><div id="drugList" class="list" aria-label="Drugs to drag"></div></section>
+  <section class="panel"><h2>Category Descriptions</h2><div id="descList" class="list" aria-label="Descriptions to drop on"></div></section>
+</main>
+
+<footer>Most products are OTC. Educational use only.</footer>
+
+<script>
+// ===== DATA =====
+const DRUGS = [
+  // Stimulants
+  { name: "Bisacodyl", category: "Stimulant Laxative", group: "stimulants" },
+  { name: "Senna", category: "Stimulant Laxative", group: "stimulants" },
+  { name: "Sodium Picosulfate", category: "Stimulant Laxative", group: "stimulants" },
+
+  // Saline (salt) laxatives
+  { name: "Magnesium salts", category: "Saline Laxative", group: "salines" },
+  { name: "Potassium salts", category: "Saline Laxative", group: "salines" },
+  { name: "Sodium salts", category: "Saline Laxative", group: "salines" },
+
+  // Stool softeners
+  { name: "Docusate", category: "Stool Softener", group: "stool-softeners" },
+  { name: "Mineral Oil", category: "Stool Softener", group: "stool-softeners" },
+
+  // Bulk forming
+  { name: "Dietary fiber/bran/fruits/grains", category: "Bulk-Forming Laxative", group: "bulk" },
+  { name: "Psyllium", category: "Bulk-Forming Laxative", group: "bulk" },
+  { name: "(Carboxy)Methylcellulose", category: "Bulk-Forming Laxative", group: "bulk" },
+  { name: "Calcium polycarbophil", category: "Bulk-Forming Laxative", group: "bulk" },
+
+  // Osmotics
+  { name: "Lactulose", category: "Osmotic Laxative", group: "osmotics" },
+  { name: "Polyethylene glycol", category: "Osmotic Laxative", group: "osmotics" },
+  { name: "Sorbitol", category: "Osmotic Laxative", group: "osmotics" },
+  { name: "Glycerin", category: "Osmotic Laxative", group: "osmotics" }
+];
+
+const DESCRIPTIONS = [
+  { label: "Stimulants", match: { type: "group", key: "stimulants" },
+    text: "Directly stimulate enteric nerves and colonic smooth muscle to ↑ peristalsis (motility) → bowel movement." },
+
+  { label: "‘Salines’ (salt laxatives)", match: { type: "group", key: "salines" },
+    text: "Poorly absorbed salts osmotically draw water into the intestinal lumen → rapid bowel evacuation." },
+
+  { label: "Stool Softeners", match: { type: "group", key: "stool-softeners" },
+    text: "Surfactant/lubricant agents that allow water & lipids to penetrate stool and reduce water reabsorption → softer stool, easier passage." },
+
+  { label: "Bulk Forming", match: { type: "group", key: "bulk" },
+    text: "Fiber-like polymers absorb water to form a viscous gel that ↑ stool bulk → stimulates peristalsis and normalizes stool form." },
+
+  { label: "Osmotics", match: { type: "group", key: "osmotics" },
+    text: "Non-absorbable sugars/polymers draw water into the lumen → soften stool and increase motility (suppository form acts quickly)." }
+];
+
+// ===== UTIL =====
+function shuffle(arr){const a=arr.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function slug(s){return 'drug-'+s.toLowerCase().replace(/[^a-z0-9]+/g,'-');}
+const drugListEl=document.getElementById('drugList');
+const descListEl=document.getElementById('descList');
+const scoreEl=document.getElementById('score');
+let matched=new Set();
+
+function render(){
+  matched.clear(); scoreEl.textContent='';
+  drugListEl.innerHTML=''; descListEl.innerHTML='';
+
+  const left = shuffle(DRUGS);
+  const right = shuffle(DESCRIPTIONS);
+
+  left.forEach(d=>{
+    const el=document.createElement('div');
+    el.className='pill'; el.draggable=true; el.id=slug(d.name);
+    el.innerHTML = `<span>${d.name}</span><span class="tag">${d.category}</span>`;
+    el.addEventListener('dragstart', e=>{
+      e.dataTransfer.setData('text/plain', d.name);
+      e.dataTransfer.effectAllowed='move';
+    });
+    drugListEl.appendChild(el);
+  });
+
+  right.forEach(d=>{
+    const el=document.createElement('div');
+    el.className='drop';
+    el.dataset.matchType = d.match.type;
+    el.dataset.matchKey  = d.match.key;
+
+    const cap=document.createElement('div');
+    cap.className='desc';
+    cap.innerHTML = `<b>${d.label}:</b> ${d.text}`;
+    el.appendChild(cap);
+
+    const chips=document.createElement('div'); chips.className='chips'; el.appendChild(chips);
+
+    el.addEventListener('dragover', e=>{ e.preventDefault(); el.classList.add('hover'); });
+    el.addEventListener('dragleave', ()=> el.classList.remove('hover'));
+    el.addEventListener('drop', e=> handleDrop(e, el, chips));
+
+    descListEl.appendChild(el);
+  });
+}
+
+function drugByName(name){return DRUGS.find(x=>x.name.toLowerCase()===name.toLowerCase());}
+
+function accepts(el, drugName){
+  const t=el.dataset.matchType;
+  if(t==='group'){
+    const d=drugByName(drugName);
+    return d && d.group === el.dataset.matchKey;
+  }
+  return false;
+}
+
+function handleDrop(e, el, chips){
+  e.preventDefault();
+  el.classList.remove('hover');
+  const drugName = e.dataTransfer.getData('text/plain');
+  const ok = accepts(el, drugName);
+  const dragged = document.getElementById(slug(drugName));
+  if(!dragged) return;
+
+  if(ok){
+    el.classList.add('filled');
+    el.style.borderColor='rgba(46,204,113,.85)';
+    el.style.background='rgba(46,204,113,.08)';
+    const chip=document.createElement('span'); chip.className='chip'; chip.textContent=drugName;
+    chips.appendChild(chip);
+
+    dragged.style.opacity='.35'; dragged.draggable=false;
+    const badge = dragged.querySelector('.tag'); if(badge) badge.textContent='matched';
+    matched.add(drugName);
+    updateScore();
+  }else{
+    el.animate([{transform:'translateX(0)'},{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'translateX(0)'}],{duration:180,iterations:1});
+    el.style.borderColor='rgba(231,76,60,.85)';
+    setTimeout(()=>{ el.style.borderColor='rgba(138,180,255,.35)'; }, 240);
+  }
+}
+
+function updateScore(){
+  const total = DRUGS.length;
+  const n = matched.size;
+  scoreEl.innerHTML = (n===total)
+    ? `<span class="correct">🎉 Perfect! ${n}/${total} matched.</span>`
+    : `<span>${n}/${total} correct — keep going!</span>`;
+}
+
+document.getElementById('reshuffleBtn').addEventListener('click', render);
+document.getElementById('resetBtn').addEventListener('click', render);
+render();
+</script>
+</body>
+</html>
